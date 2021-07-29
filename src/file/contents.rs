@@ -1,10 +1,5 @@
 use super::history::{History, Staged};
-use std::collections::LinkedList;
-
-pub trait Readable {
-    type Item;
-    fn read(&self) -> Self::Item;
-}
+use super::header::Readable;
 
 pub struct Line {
     content: String,
@@ -27,6 +22,10 @@ impl Line {
             history: Box::new(History::start())
         }
     }
+
+    pub fn print_history(&self) {
+        println!("{}", self.history);
+    }
 }
 
 impl Readable for Line {
@@ -40,17 +39,23 @@ impl Readable for Line {
 impl Staged for Line {
     type Item = String;
 
-    fn current(&self) -> Option<&Self::Item> {
+    fn current(&self) -> Option<Self::Item> {
         self.history.current()
     }
 
-    fn revert(&mut self, steps: usize) -> LinkedList<Self::Item> {
-        let saved = self.history.revert(steps);
+    fn revert(&mut self, commit: usize) -> Self::Item {
+        let content = self.history.revert(commit);
+        self.content = content;
+
+        self.content.clone()
+    }
+
+    fn reset(&mut self) {
+        self.history.reset();
         self.content = match self.current() {
             Some(c) => c.clone(),
             None => self.content.clone()
         };
-        saved
     }
 
     fn stage(&mut self, item: Self::Item) {
