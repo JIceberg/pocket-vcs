@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::vec::Vec;
 use std::fmt;
 
 enum Commit<T> {
@@ -39,7 +40,7 @@ impl<T: fmt::Display> fmt::Display for Commit<T> {
     }
 }
 
-pub struct History<T>(VecDeque<Commit<T>>, Option<Commit<T>>);
+pub struct History<T>(VecDeque<Commit<T>>, Vec<Commit<T>>);
 
 impl<T: Clone> Clone for History<T> {
     fn clone(&self) -> Self {
@@ -47,9 +48,9 @@ impl<T: Clone> Clone for History<T> {
     }
 }
 
-impl<T> History<T> {
+impl<T: Clone> History<T> {
     pub fn start() -> Self {
-        Self(VecDeque::new(), None)
+        Self(VecDeque::new(), Vec::new())
     }
 
     fn add(&mut self, item: T) {
@@ -57,13 +58,14 @@ impl<T> History<T> {
     }
 
     fn add_unstaged(&mut self) {
-        if let Some(_) = self.1 {
-            self.0.push_back(self.1.take().unwrap());
+        for item in &self.1 {
+            self.0.push_back(item.clone());
         }
+        self.clear_unstaged();
     }
 
     fn clear_unstaged(&mut self) {
-        self.1.take();
+        self.1.clear();
     }
 }
 
@@ -111,8 +113,8 @@ impl<T: Eq + Clone> Staged for History<T> {
             panic!("No staged history.");
         }
 
-        if let Some(_) = self.1 {
-            panic!("Please stage your changes.");
+        if !self.1.is_empty() {
+            panic!("Please stage your changes before performing a revert.");
         }
 
         if commit > self.0.len() {
@@ -120,7 +122,7 @@ impl<T: Eq + Clone> Staged for History<T> {
         }
 
         let ret = self.0[commit-1].get();
-        self.1.replace(
+        self.1.push(
             Commit::Revert(ret.clone(), commit)
         );
 
