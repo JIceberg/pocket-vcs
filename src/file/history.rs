@@ -98,7 +98,7 @@ pub trait Staged {
     fn stage(&mut self, item: Self::Item);
 }
 
-impl<T: Eq + Clone> Staged for History<T> {
+impl<T: Clone> Staged for History<T> {
     type Item = T;
 
     fn current(&self) -> Option<Self::Item> {
@@ -135,13 +135,6 @@ impl<T: Eq + Clone> Staged for History<T> {
 
     fn stage(&mut self, item: Self::Item) {
         self.add_unstaged();
-        match self.current() {
-            Some(curr) => {
-                if curr != item {
-                    self.add(item);
-                }
-            },
-            None => self.add(item)
-        }
+        self.add(item);
     }
 }
