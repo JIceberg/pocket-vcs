@@ -1,8 +1,8 @@
 mod file;
+mod versioning;
 
-use file::contents::Line;
-use file::history::Staged;
-use file::header::Readable;
+use file::contents::{Line, Readable};
+use versioning::history::Staged;
 
 fn main() {
     let mut line = Line::new();

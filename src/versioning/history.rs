@@ -117,7 +117,7 @@ impl<T: Clone> Staged for History<T> {
             panic!("Please stage your changes before performing a revert.");
         }
 
-        if commit > self.0.len() {
+        if commit.checked_sub(1).unwrap_or(self.0.len()) >= self.0.len() {
             panic!("Could not find commit {:?} in history", commit);
         }
 

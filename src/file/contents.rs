@@ -1,6 +1,10 @@
-use super::history::{History, Staged};
-use super::header::Readable;
+use crate::versioning::history::{History, Staged};
 use std::{fmt, str};
+
+pub trait Readable {
+    type Item;
+    fn read(&self) -> Self::Item;
+}
 
 #[derive(Clone)]
 struct Byteset<'a>(Option<&'a [u8]>);
@@ -88,7 +92,3 @@ impl<'a> Staged for Line<'a> {
         self.history.stage(self.content.clone());
     }
 }
-
-use std::vec::Vec;
-
-pub struct File<'a>(Vec<Line<'a>>);
