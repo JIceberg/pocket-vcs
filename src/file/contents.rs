@@ -1,5 +1,7 @@
 use crate::versioning::history::{History, Staged};
-use std::{fmt, str};
+use serde::ser::{Serialize, Serializer};
+
+use crate::versioning::delta::Delta;
 
 pub trait Readable {
     type Item;
@@ -7,13 +9,14 @@ pub trait Readable {
 }
 
 #[derive(Clone)]
-struct Byteset<'a>(Option<&'a [u8]>);
+pub struct Byteset<'a>(Option<&'a [u8]>);
 
-impl<'a> fmt::Display for Byteset<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut buf = String::new();
-        buf.push_str(str::from_utf8(self.0.unwrap_or(&[])).unwrap());
-        write!(f, "{}", buf)
+impl<'a> Serialize for Byteset<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_newtype_struct("Byteset", &self.0)
     }
 }
 
@@ -49,8 +52,8 @@ impl<'a> Line<'a> {
         }
     }
 
-    pub fn print_history(&self) {
-        println!("{}", self.history);
+    pub fn get_current_delta(&self) -> Delta<Byteset<'a>> {
+        self.history.get_current_delta()
     }
 }
 
@@ -72,11 +75,11 @@ impl<'a> Staged for Line<'a> {
         }
     }
 
-    fn revert(&mut self, commit: usize) -> Self::Item {
-        let content = self.history.revert(commit);
+    fn revert(&mut self, commit: usize) -> Option<Self::Item> {
+        let content = self.history.revert(commit).unwrap();
         self.content.set(content.get());
 
-        self.content.get()
+        Some(self.content.get())
     }
 
     fn reset(&mut self) {

@@ -1,42 +1,30 @@
 use std::collections::VecDeque;
 use std::vec::Vec;
-use std::fmt;
 
+use super::delta::Delta;
+
+#[derive(Clone)]
 enum Commit<T> {
-    Content(T),
-    Revert(T, usize),
-    Merge(T, T),
+    Content(Delta<T>),
+    Revert(Delta<T>, usize),
+    Merge(T, T, Delta<T>),
 }
 
 impl<T: Clone> Commit<T> {
-    fn get(&self) -> T {
+    fn get(&self) -> Option<T> {
+        match &*self {
+            Self::Content(x) => x.get_current(),
+            Self::Revert(content, _) => content.get_current(),
+            Self::Merge(_, _, result) => result.get_current(),
+        }
+    }
+
+    fn get_delta(&self) -> Delta<T> {
         match &*self {
             Self::Content(x) => x.clone(),
             Self::Revert(content, _) => content.clone(),
-            Self::Merge(_, modified) => modified.clone(),
+            Self::Merge(_, _, result) => result.clone(),
         }
-    }
-}
-
-impl<T: Clone> Clone for Commit<T> {
-    fn clone(&self) -> Self {
-        match &*self {
-            Self::Content(x) => Self::Content(x.clone()),
-            Self::Revert(content, idx) => Self::Revert(content.clone(), *idx),
-            Self::Merge(previous, modified) => Self::Merge(previous.clone(), modified.clone())
-        }
-    }
-}
-
-impl<T: fmt::Display> fmt::Display for Commit<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let res = match &*self {
-            Self::Content(content) => format!("{}", content),
-            Self::Revert(content, commit) => format!("REVERT({}) => {}", commit, content),
-            Self::Merge(previous, modified) => format!("MERGE {} => {}", previous, modified),
-        };
-
-        write!(f, "{}", res)
     }
 }
 
@@ -53,8 +41,22 @@ impl<T: Clone> History<T> {
         Self(VecDeque::new(), Vec::new())
     }
 
+    pub fn get_current_delta(&self) -> Delta<T> {
+        let delta = match self.0.back() {
+            Some(back) => back.get_delta(),
+            None => Delta::new()
+        };
+
+        delta
+    }
+
     fn add(&mut self, item: T) {
-        self.0.push_back(Commit::Content(item));
+        let mut delta = match self.0.back() {
+            Some(back) => back.get_delta(),
+            None => Delta::new()
+        };
+        delta.update(item);
+        self.0.push_back(Commit::Content(delta));
     }
 
     fn add_unstaged(&mut self) {
@@ -69,19 +71,6 @@ impl<T: Clone> History<T> {
     }
 }
 
-impl<T: fmt::Display> fmt::Display for History<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut x: String = match self.0.front() {
-            Some(commit) => format!("1:\t{}\n", commit),
-            None => String::from("No history")
-        };
-        for i in 1..self.0.len() {
-            x.push_str(format!("{}:\t{}\n", i+1, self.0[i]).as_str());
-        }
-        writeln!(f, "{}", x)
-    }
-}
-
 pub trait Staged {
     type Item;
 
@@ -89,7 +78,7 @@ pub trait Staged {
     fn current(&self) -> Option<Self::Item>;
 
     // revert back to the specified commit
-    fn revert(&mut self, commit: usize) -> Self::Item;
+    fn revert(&mut self, commit: usize) -> Option<Self::Item>;
 
     // reset back to the most recently staged commit
     fn reset(&mut self);
@@ -103,12 +92,12 @@ impl<T: Clone> Staged for History<T> {
 
     fn current(&self) -> Option<Self::Item> {
         match self.0.back() {
-            Some(commit) => Some(commit.get()),
+            Some(commit) => commit.get(),
             None => None
         }
     }
 
-    fn revert(&mut self, commit: usize) -> Self::Item {
+    fn revert(&mut self, commit: usize) -> Option<Self::Item> {
         if self.0.is_empty() {
             panic!("No staged history.");
         }
@@ -121,12 +110,11 @@ impl<T: Clone> Staged for History<T> {
             panic!("Could not find commit {:?} in history", commit);
         }
 
-        let ret = self.0[commit-1].get();
         self.1.push(
-            Commit::Revert(ret.clone(), commit)
+            Commit::Revert(self.0[commit-1].get_delta(), commit)
         );
 
-        ret
+        self.0[commit-1].get()
     }
 
     fn reset(&mut self) {
